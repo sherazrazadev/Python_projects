@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Glasses Try-On</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px;
+        }
+
+        h1 {
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            flex-direction: row; /* Change to 'column' for vertical alignment */
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .notifications {
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: green;
+        }
+
+        .video-container {
+            display: flex;
+            gap: 20px;
+            margin-top: 20px;
+        }
+
+        video, img {
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 640px;
+            height: 480px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Live Glasses Try-On</h1>
+    
+    <div class="controls">
+        <input type="file" id="uploadImage" accept="image/*">
+        <button onclick="removeBackground()">Remove Background</button>
+        <button onclick="quickTry()">Quick Try</button>
+    </div>
+    
+    <div class="notifications" id="notification"></div>
+
+    <div class="video-container">
+        <video id="webcam" autoplay playsinline></video>
+        <img id="processedImage" alt="Processed image" style="display:none;"/>
+    </div>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const processedImage = document.getElementById('processedImage');
+        const notification = document.getElementById('notification');
+        let uploadedImageData;
+        let streaming = false;
+
+        // Set up webcam access
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => { video.srcObject = stream })
+            .catch(error => console.error('Stream capture error: ', error));
+
+        // Function to handle image upload
+        document.getElementById('uploadImage').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function () {
+                uploadedImageData = reader.result;
+                notification.textContent = 'Glasses image uploaded successfully.';
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Function to remove background
+        function removeBackground() {
+            if (!uploadedImageData) {
+                alert('Please upload an image first.');
+                return;
+            }
+            notification.textContent = 'Processing background removal...';
+            fetch('/remove_bg', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ image: uploadedImageData })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status && data.status === 'success') {
+                    processedImage.src = data.image;
+                    processedImage.style.display = "block";
+                    notification.textContent = 'Glasses background removed successfully.';
+                } else {
+                    console.error('Error removing background: ', data.message);
+                    notification.textContent = 'Error: Failed to remove background.';
+                }
+            })
+            .catch(error => {
+                console.error('Fetch error: ', error);
+                notification.textContent = 'Error: Failed to connect to the background removal service.';
+            });
+        }
+
+        // Function to start the live overlay application
+        function quickTry() {
+            if (!processedImage.src) {
+                alert('Please remove the background of an uploaded image first.');
+                return;
+            }
+
+            if (!streaming) {
+                streaming = true;
+                applyOverlayLive();
+            }
+        }
+
+        // Function to capture frames and apply overlay continuously
+        function applyOverlayLive() {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+
+            function processFrame() {
+                if (!streaming) return; // Stop if streaming is disabled
+
+                // Draw the current video frame on the canvas
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/png');
+
+                fetch('/apply_overlay', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: imageData })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status && data.status === 'success') {
+                        processedImage.src = data.image;
+                        processedImage.style.display = "block";
+                    } else {
+                        console.error('Error processing image: ', data.message);
+                    }
+
+                    // Continue the loop
+                    requestAnimationFrame(processFrame);
+                })
+                .catch(error => {
+                    console.error('Fetch error: ', error);
+                    streaming = false; // Stop streaming in case of an error
+                });
+            }
+
+            // Start the frame processing loop
+            processFrame();
+        }
+    </script>
+</body>
+</html>
+
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Glasses Try-On</title>
+</head>
+<body>
+    <h1>Live Glasses Try-On</h1>
+    <input type="file" id="uploadImage" accept="image/*">
+    <button onclick="removeBackground()">Remove Background</button>
+    <button onclick="quickTry()">Quick Try</button>
+    <video id="webcam" autoplay playsinline width="640" height="480"></video>
+    <img id="processedImage" alt="Processed image" style="display:none;"/>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const processedImage = document.getElementById('processedImage');
+        let uploadedImageData;
+        let streaming = false;
+
+        // Set up webcam access
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => { video.srcObject = stream })
+            .catch(error => console.error('Stream capture error: ', error));
+
+        // Function to handle image upload
+        document.getElementById('uploadImage').addEventListener('change', function (event) {
+            const file = event.target.files[0];
+            const reader = new FileReader();
+            reader.onload = function () {
+                uploadedImageData = reader.result;
+            };
+            reader.readAsDataURL(file);
+        });
+
+        // Function to remove background
+        function removeBackground() {
+            if (!uploadedImageData) {
+                alert('Please upload an image first.');
+                return;
+            }
+            fetch('/remove_bg', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ image: uploadedImageData })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status && data.status === 'success') {
+                    processedImage.src = data.image;
+                    processedImage.style.display = "block";
+                } else {
+                    console.error('Error removing background: ', data.message);
+                }
+            })
+            .catch(error => console.error('Fetch error: ', error));
+        }
+
+        // Function to start the live overlay application
+        function quickTry() {
+            if (!processedImage.src) {
+                alert('Please remove the background of an uploaded image first.');
+                return;
+            }
+
+            if (!streaming) {
+                streaming = true;
+                applyOverlayLive();
+            }
+        }
+
+        // Function to capture frames and apply overlay continuously
+        function applyOverlayLive() {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const context = canvas.getContext('2d');
+
+            function processFrame() {
+                if (!streaming) return; // Stop if streaming is disabled
+
+                // Draw the current video frame on the canvas
+                context.drawImage(video, 0, 0, canvas.width, canvas.height);
+                const imageData = canvas.toDataURL('image/png');
+
+                fetch('/apply_overlay', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ image: imageData })
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status && data.status === 'success') {
+                        processedImage.src = data.image;
+                        processedImage.style.display = "block";
+                    } else {
+                        console.error('Error processing image: ', data.message);
+                    }
+
+                    // Continue the loop
+                    requestAnimationFrame(processFrame);
+                })
+                .catch(error => {
+                    console.error('Fetch error: ', error);
+                    streaming = false; // Stop streaming in case of an error
+                });
+            }
+
+            // Start the frame processing loop
+            processFrame();
+        }
+    </script>
+</body>
+</html> -->

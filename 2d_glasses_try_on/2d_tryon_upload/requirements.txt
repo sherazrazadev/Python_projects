@@ -1,0 +1,93 @@
+def random_augmentation_params():
+    brightness_factor = random.uniform(1.2, 1.4)  # Lowered brightness to avoid overexposure
+    contrast_factor = random.uniform(1.1, 1.3)  # Slightly reduced contrast to avoid excessive saturation
+    noise_level = random.uniform(0.01, 0.02)  # Reduced noise to minimize excessive grain
+    sharpen_intensity = random.uniform(1.0, 1.5)  # Reduced sharpening to prevent over-sharpening artifacts
+    gamma_value = random.uniform(0.9, 1.1)  # Adjust gamma within a balanced range to avoid extreme changes
+    return brightness_factor, contrast_factor, noise_level, sharpen_intensity, gamma_value
+
+def augment_image(image, brightness_factor, contrast_factor, noise_level, sharpen_intensity, gamma_value):
+    image = image.float() / 255.0  # Normalize to [0, 1]
+
+    # Apply brightness adjustment
+    brightened = torch.clamp(image * brightness_factor, 0, 1)
+
+    # Apply contrast adjustment
+    mean = torch.mean(brightened, dim=(0, 1), keepdim=True)
+    adjusted = contrast_factor * (brightened - mean) + mean
+    adjusted = torch.clamp(adjusted, 0, 1)
+
+    # Apply gamma correction before sharpening to avoid excessive brightening
+    gamma_corrected = torch.pow(adjusted, gamma_value)
+
+    # Permute image to [channels, height, width] for PyTorch conv2d
+    gamma_corrected = gamma_corrected.permute(2, 0, 1).unsqueeze(0)  # Shape: [1, channels, height, width]
+
+    # Apply sharpening with a reduced kernel value
+    kernel = torch.tensor([[0, -1, 0], [-1, 4 + sharpen_intensity, -1], [0, -1, 0]], dtype=torch.float32)
+    kernel = kernel.view(1, 1, 3, 3).to(image.device)  # Kernel shape for 2D convolution
+    kernel = kernel.expand(3, 1, 3, 3)  # Expand to apply on RGB channels
+
+    sharpened = F.conv2d(gamma_corrected, kernel, groups=3, padding=1)  # Apply 2D convolution for sharpening
+    sharpened = torch.clamp(sharpened, 0, 1)  # Ensure values are in [0, 1] after sharpening
+    sharpened = sharpened.squeeze(0).permute(1, 2, 0)  # Reshape back to [height, width, channels]
+
+    # Add random noise
+    noise = noise_level * torch.randn_like(sharpened)
+    noisy_image = torch.clamp(sharpened + noise, 0, 1)
+
+    return (noisy_image * 255).byte()
+
+def augment_camera_obs(camera_batch):
+    augmented_images = []
+    batch_size = len(camera_batch)
+    num_to_augment = int(0.2 * batch_size)  # 20% of the batch
+    augment_indices = random.sample(range(batch_size), num_to_augment)  # Randomly select 20% indices
+
+    # Create 'frames' directory if it doesn't exist
+    if not os.path.exists('frames'):
+        os.makedirs('frames')
+    saved_frame = None
+
+    for sequence_idx, sequence in enumerate(camera_batch):  # Iterate over batch
+        augmented_sequence = []
+
+        for img_idx, img in enumerate(sequence):  # Iterate over sequence (time dimension)
+            #print(f"Original image shape (CHW): {img.shape}")
+            img = img.permute(1, 2, 0)  # Convert to HWC for processing
+            #print(f"Image shape after permute to HWC: {img.shape}")
+
+            # Augment only if the current index is in the randomly selected indices
+            if sequence_idx in augment_indices:
+                brightness_factor, contrast_factor, noise_level, sharpen_intensity, gamma_value = random_augmentation_params()
+                augmented_img = augment_image(
+                    img,
+                    brightness_factor=brightness_factor,
+                    contrast_factor=contrast_factor,
+                    noise_level=noise_level,
+                    sharpen_intensity=sharpen_intensity,
+                    gamma_value=gamma_value,
+                )
+                
+                # Convert augmented image to [256, 256, 3] format for saving
+                augmented_img_for_saving = augmented_img.cpu().numpy()
+                if augmented_img_for_saving.shape[-1] == 3:  # Check for 3 channels
+                    augmented_img_for_saving = cv2.cvtColor(augmented_img_for_saving, cv2.COLOR_RGB2BGR)
+                    cv2.imwrite(f'frames/augmented_frame_{sequence_idx}_{img_idx}.png', augmented_img_for_saving)
+                    exit(0)
+                else:
+                    print(f"Error: Augmented image has {augmented_img_for_saving.shape[-1]} channels. Expected 3 channels.")
+
+            else:
+                augmented_img = img  # No augmentation
+
+            # Convert back to CHW format for further processing
+            augmented_img = augmented_img.permute(2, 0, 1).float()  # Convert back to CHW and to float32
+            augmented_sequence.append(augmented_img)
+
+        augmented_images.append(torch.stack(augmented_sequence))
+
+    augmented_batch = torch.stack(augmented_images)
+    print(f"Final augmented batch shape: {augmented_batch.shape}, dtype: {augmented_batch.dtype}")
+
+    return augmented_batch
