@@ -1,0 +1,29 @@
+numpy
+pandas
+Pillow
+potracer
+colorgram.py
+scikit-learn
+
+Adult size
+Point 1: (1378.95, 530.49)
+Point 2: (2467.85, 478.48)
+Point 3: (2523.33, 1556.97)
+Point 4: (1441.37, 1608.99)
+
+Youth size
+Point 1: (442.64, 1067.57)
+Point 2: (1116.31, 923.47)
+Point 3: (1246.00, 1582.73)
+Point 4: (604.75, 1698.01)
+
+pocket size
+Point 1: (964.72, 181.94)
+Point 2: (1332.07, 243.70)
+Point 3: (1276.80, 588.29)
+Point 4: (915.96, 542.78)
+
+Point 1: (1138.98, 544.29)
+Point 2: (1558.48, 568.76)
+Point 3: (1537.51, 1082.65)
+Point 4: (1118.01, 1054.68)
