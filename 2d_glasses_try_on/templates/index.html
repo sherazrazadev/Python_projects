@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SnapLens Web App</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            font-family: Arial, sans-serif;
+        }
+        img {
+            border: 2px solid black;
+            width: 640px;
+            height: 480px;
+        }
+        button {
+            padding: 10px;
+            font-size: 16px;
+            margin-top: 10px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <h1>SnapLens Web App</h1>
+    <img id="videoFeed" src="/video_feed" alt="Webcam Feed">
+    <button onclick="switchOverlay()">Switch Overlay</button>
+
+    <script>
+        // Switch overlay using the Flask route
+        function switchOverlay() {
+            fetch('/next_overlay')
+                .then(response => response.text())
+                .then(data => console.log(data));
+        }
+    </script>
+</body>
+</html>
